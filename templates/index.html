@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HMS - Healthcare Management System</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container animate-fade-in" style="margin-top: 5rem;">
+        <div class="header">
+            <h1><i class="fa-solid fa-hospital"></i> HMS</h1>
+            <p>Healthcare Management System</p>
+        </div>
+
+        <!-- Main Selection Options -->
+        <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 2rem;" id="main-options">
+            <a href="/online" style="text-decoration: none; flex: 1 1 300px; max-width: 400px;">
+                <div class="glass-panel" style="text-align: center; height: 100%; display: flex; flex-direction: column; justify-content: center;">
+                    <i class="fa-regular fa-calendar-plus" style="font-size: 3rem; color: var(--accent); margin-bottom: 1rem;"></i>
+                    <h2>New Appointment</h2>
+                    <p>Register & Book a new appointment</p>
+                </div>
+            </a>
+            
+            <a href="#" style="text-decoration: none; flex: 1 1 300px; max-width: 400px;" onclick="showPatientLogin(event)">
+                <div class="glass-panel" style="text-align: center; height: 100%; display: flex; flex-direction: column; justify-content: center;">
+                    <i class="fa-solid fa-user-injured" style="font-size: 3rem; color: #A371F7; margin-bottom: 1rem;"></i>
+                    <h2>Existing User Login</h2>
+                    <p>Access your portal and prescriptions</p>
+                </div>
+            </a>
+
+            <a href="#" style="text-decoration: none; flex: 1 1 300px; max-width: 400px;" onclick="showDoctorLogin(event)">
+                <div class="glass-panel" style="text-align: center; height: 100%; display: flex; flex-direction: column; justify-content: center;">
+                    <i class="fa-solid fa-user-doctor" style="font-size: 3rem; color: var(--success); margin-bottom: 1rem;"></i>
+                    <h2>Doctor Login</h2>
+                    <p>Secure login for medical staff</p>
+                </div>
+            </a>
+        </div>
+
+        <!-- Patient Login Panel -->
+        <div class="glass-panel hidden animate-fade-in" id="patient-login-panel" style="max-width: 400px; margin: 0 auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2>Patient Login</h2>
+                <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 1.5rem;" onclick="goBack()"></i>
+            </div>
+            <div class="input-group">
+                <label>Mobile Number</label>
+                <input type="text" id="p-phone" value="1234567899" placeholder="e.g. 1234567899">
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="p-pass" value="pass1" placeholder="Enter password">
+            </div>
+            <button class="btn" style="width: 100%;" onclick="loginPatient()">Login</button>
+            <div id="p-error" style="color: var(--danger); margin-top: 1rem; text-align: center;" class="hidden"></div>
+        </div>
+
+        <!-- Doctor Login Panel -->
+        <div class="glass-panel hidden animate-fade-in" id="doctor-login-panel" style="max-width: 400px; margin: 0 auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2>Doctor Login</h2>
+                <i class="fa-solid fa-xmark" style="cursor: pointer; font-size: 1.5rem;" onclick="goBack()"></i>
+            </div>
+            <div class="input-group">
+                <label>Username</label>
+                <input type="text" id="d-user" value="drsmith1" placeholder="e.g. drsmith1">
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="d-pass" value="doc1" placeholder="Enter password">
+            </div>
+            <button class="btn btn-success" style="width: 100%;" onclick="loginDoctor()">Secure Login</button>
+            <div id="d-error" style="color: var(--danger); margin-top: 1rem; text-align: center;" class="hidden"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/api.js"></script>
+    <script>
+        function showPatientLogin(e) {
+            e.preventDefault();
+            hideElement('main-options');
+            showElement('patient-login-panel');
+        }
+
+        function showDoctorLogin(e) {
+            e.preventDefault();
+            hideElement('main-options');
+            showElement('doctor-login-panel');
+        }
+
+        function goBack() {
+            hideElement('patient-login-panel');
+            hideElement('doctor-login-panel');
+            showElement('main-options');
+            document.getElementById('p-error').classList.add('hidden');
+            document.getElementById('d-error').classList.add('hidden');
+        }
+
+        async function loginPatient() {
+            const phone = document.getElementById('p-phone').value;
+            const pass = document.getElementById('p-pass').value;
+            try {
+                const res = await api.loginPatient(phone, pass);
+                if(res.success) {
+                    // store basic auth info in localStorage for demo
+                    localStorage.setItem('patient_id', res.patient.id);
+                    localStorage.setItem('patient_name', res.patient.name);
+                    window.location.href = '/portal';
+                }
+            } catch(e) {
+                const err = document.getElementById('p-error');
+                err.innerText = e.message;
+                err.classList.remove('hidden');
+            }
+        }
+
+        async function loginDoctor() {
+            const user = document.getElementById('d-user').value;
+            const pass = document.getElementById('d-pass').value;
+            try {
+                const res = await api.loginDoctor(user, pass);
+                if(res.success) {
+                    localStorage.setItem('doctor_id', res.doctor.id);
+                    localStorage.setItem('doctor_name', res.doctor.name);
+                    window.location.href = '/dashboard';
+                }
+            } catch(e) {
+                const err = document.getElementById('d-error');
+                err.innerText = e.message;
+                err.classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+</html>

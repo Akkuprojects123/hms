@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Appointment - HMS</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .symptom-bubble {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background: #ffffff;
+            color: var(--text-primary);
+            border: 1px solid #ccc;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            border-radius: 999px;
+            margin: 0.25rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+        .symptom-bubble:hover {
+            background: rgba(229, 57, 53, 0.1); /* light red hover */
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        
+        .type-toggle {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .type-btn {
+            flex: 1;
+            padding: 1rem;
+            text-align: center;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .type-btn.active {
+            border-color: var(--accent);
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        #video-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #000;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+        }
+        .video-large {
+            flex: 1;
+            background: #111;
+            display: flex; align-items: center; justify-content: center;
+            color: #555; font-size: 2rem;
+            position: relative;
+        }
+        .video-small {
+            position: absolute;
+            bottom: 20px; right: 20px;
+            width: 200px; height: 150px;
+            background: #333;
+            border-radius: 8px;
+            border: 2px solid #555;
+            display: flex; align-items: center; justify-content: center;
+            color: #888;
+        }
+        .video-controls {
+            padding: 20px;
+            background: #1a1a1a;
+            display: flex; justify-content: center; gap: 2rem;
+        }
+        .control-btn {
+            width: 50px; height: 50px;
+            border-radius: 50%;
+            border: none;
+            background: #333; color: white;
+            font-size: 1.2rem; cursor: pointer;
+        }
+        .control-btn.danger { background: var(--danger); }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/"><h2><i class="fa-solid fa-hospital"></i> HMS</h2></a>
+        <div class="nav-links">
+            <span><i class="fa-solid fa-calendar-plus"></i> New Appointment</span>
+        </div>
+    </nav>
+
+    <div class="container" style="max-width: 600px; margin-top: 2rem;">
+        
+        <div class="glass-panel animate-fade-in" id="step-phone">
+            <h2>Book Appointment</h2>
+            <p>Enter your phone number to start.</p>
+            <div class="input-group">
+                <input type="text" id="phone" placeholder="e.g. 555-0123" style="font-size: 1.5rem; text-align: center;">
+            </div>
+            <button class="btn" style="width: 100%;" onclick="checkPatient()">Continue <i class="fa-solid fa-arrow-right"></i></button>
+            <div id="phone-error" style="color: var(--danger); margin-top: 1rem; text-align: center;" class="hidden"></div>
+        </div>
+
+        <div class="glass-panel hidden animate-fade-in" id="step-register">
+            <h2>New Patient Registration</h2>
+            <div class="input-group">
+                <label>Full Name</label>
+                <input type="text" id="reg-name" placeholder="John Doe">
+            </div>
+            <div class="grid grid-2" style="gap: 1rem;">
+                <div class="input-group">
+                    <label>Age</label>
+                    <input type="number" id="reg-age" placeholder="30">
+                </div>
+                <div class="input-group">
+                    <label>Gender</label>
+                    <select id="reg-gender">
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+            </div>
+            <div class="input-group">
+                <label>Set Password (for future portal access)</label>
+                <input type="password" id="reg-pass" placeholder="Enter password">
+            </div>
+            <button class="btn btn-success" style="width: 100%;" onclick="registerPatient()">Register & Continue</button>
+        </div>
+
+        <div class="glass-panel hidden animate-fade-in" id="step-triage">
+            <h2>Consultation Details</h2>
+            <p>Welcome, <strong id="triage-name"></strong>!</p>
+            
+            <label style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem; display: block;">Appointment Type</label>
+            <div class="type-toggle">
+                <div class="type-btn active" id="btn-type-direct" onclick="setApptType('Direct')">
+                    <i class="fa-solid fa-hospital-user" style="font-size: 1.5rem; margin-bottom: 0.5rem; display: block;"></i>
+                    Direct (In-Hospital)
+                </div>
+                <div class="type-btn" id="btn-type-online" onclick="setApptType('Online')">
+                    <i class="fa-solid fa-video" style="font-size: 1.5rem; margin-bottom: 0.5rem; display: block;"></i>
+                    Online (Video Call)
+                </div>
+            </div>
+
+            <div id="distance-alert" class="hidden" style="background: rgba(210, 153, 34, 0.1); border-left: 4px solid var(--warning); padding: 1rem; margin-bottom: 1.5rem; border-radius: 4px; font-size: 0.9rem;">
+                <i class="fa-solid fa-location-dot"></i> <strong>Distance Alert:</strong> You are 15km away. Please arrive 30 mins before estimated time.
+            </div>
+
+            <label style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem; display: block;">Select Preferred Doctor (Optional)</label>
+            <div class="input-group">
+                <select id="pref-doctor">
+                    <option value="">No Preference (Auto-Triage)</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>Select Common Symptoms</label>
+                <div style="margin-bottom: 0.5rem;">
+                    <span class="symptom-bubble" onclick="addSymptom('Fever')">Fever</span>
+                    <span class="symptom-bubble" onclick="addSymptom('Cough')">Cough</span>
+                    <span class="symptom-bubble" onclick="addSymptom('Headache')">Headache</span>
+                    <span class="symptom-bubble" onclick="addSymptom('Body Ache')">Body Ache</span>
+                    <span class="symptom-bubble" style="border-color: var(--danger); color: var(--danger); font-weight: 500;" onclick="addSymptom('Chest Pain')">Chest Pain</span>
+                    <span class="symptom-bubble" style="border-color: var(--danger); color: var(--danger); font-weight: 500;" onclick="addSymptom('Vomiting')">Vomiting</span>
+                </div>
+                
+                <label>Symptoms Description</label>
+                <textarea id="symptoms" rows="3" placeholder="Symptoms..." oninput="checkDoctorAvailability()"></textarea>
+                <div id="doc-availability" style="margin-top: 0.5rem; color: var(--success); font-weight: 500; font-size: 0.9rem; min-height: 20px;"></div>
+            </div>
+            <button class="btn" style="width: 100%;" onclick="createAppointment()">Confirm Booking</button>
+        </div>
+
+        <div class="glass-panel hidden animate-fade-in" id="step-token" style="text-align: center;">
+            <div id="token-active-area">
+                <div style="color: var(--success); font-size: 3rem; margin-bottom: 1rem;">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <h2>Booking Confirmed!</h2>
+                <div style="font-size: 4rem; font-weight: bold; color: var(--accent); margin: 1rem 0;" id="token-number"></div>
+                
+                <div class="grid grid-2" style="margin-top: 2rem; text-align: left;">
+                    <div style="background: #ffffff; border: 1px solid var(--border-color); padding: 1rem; border-radius: 8px;">
+                        <label style="color: var(--text-secondary); font-size: 0.9rem;">Assigned Doctor</label>
+                        <div style="font-size: 1.2rem; font-weight: 500;" id="assigned-doctor"></div>
+                        <div id="priority-badge" class="badge" style="display: inline-block; margin-top: 0.5rem;"></div>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid var(--border-color); padding: 1rem; border-radius: 8px;">
+                        <label style="color: var(--text-secondary); font-size: 0.9rem;">Status / Wait</label>
+                        
+                        <!-- Offline Wait UI -->
+                        <div id="ui-offline-wait">
+                            <div style="font-size: 1.8rem; font-weight: bold; color: var(--warning);" id="live-timer">00:00</div>
+                            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">Est. <span id="patients-ahead"></span> patients ahead</div>
+                        </div>
+
+                        <!-- Online Wait UI -->
+                        <div id="ui-online-wait" class="hidden" style="margin-top: 0.5rem;">
+                            <button class="btn btn-success" onclick="startVideoCall()"><i class="fa-solid fa-video"></i> Join Video Room</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pharmacy Success Message for Direct Appointments -->
+            <div id="pharmacy-message" class="hidden animate-fade-in" style="margin-top: 2rem; padding: 2rem; background: rgba(46, 160, 67, 0.1); border: 2px solid var(--success); border-radius: 8px;">
+                <i class="fa-solid fa-prescription-bottle-medical" style="font-size: 4rem; color: var(--success); margin-bottom: 1rem;"></i>
+                <h2>Consultation Over!</h2>
+                <p style="font-size: 1.1rem; color: var(--text-primary); margin-top: 1rem;">Please proceed to collect your medicines from the Medical Shop.</p>
+            </div>
+
+            <!-- Download Prescription for Online -->
+            <div id="download-message" class="hidden animate-fade-in" style="margin-top: 2rem; padding: 2rem; background: rgba(88, 166, 255, 0.1); border: 2px solid var(--accent); border-radius: 8px;">
+                <i class="fa-solid fa-file-pdf" style="font-size: 4rem; color: var(--accent); margin-bottom: 1rem;"></i>
+                <h2>Session Complete</h2>
+                <p>Your digital prescription is ready.</p>
+                <button class="btn" style="margin-top: 1rem; width: 100%;" onclick="alert('Downloading PDF Simulation...')"><i class="fa-solid fa-download"></i> Download PDF</button>
+                <button class="btn btn-success" id="btn-order-meds" style="margin-top: 1rem; width: 100%;" onclick="openOrderModal()"><i class="fa-solid fa-truck-medical"></i> Order Medicines</button>
+                <button class="btn btn-secondary" style="margin-top: 1rem; width: 100%;" onclick="window.location.href='/portal'">Go to Portal</button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Order Modal -->
+    <div id="order-modal" class="hidden" style="position: fixed; top:0; left:0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+        <div class="glass-panel" style="width: 100%; max-width: 500px; background: #ffffff; animation: fadeIn 0.3s; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+            <i class="fa-solid fa-xmark" style="position: absolute; right: 20px; top: 20px; cursor: pointer; font-size: 1.5rem; color: var(--text-secondary);" onclick="closeOrderModal()"></i>
+            <h2 style="color: var(--text-primary);">Complete Your Order</h2>
+            
+            <div style="margin-top: 1.5rem;">
+                <label style="color: var(--text-secondary); font-size: 0.9rem;">Prescription Items</label>
+                <div id="modal-medicines" style="padding: 1rem; background: #f0f2f5; border-radius: 8px; margin-top: 0.5rem; white-space: pre-wrap; color: var(--text-primary);"></div>
+            </div>
+            
+            <div style="margin-top: 1rem;">
+                <label style="color: var(--text-secondary); font-size: 0.9rem;">Total Amount</label>
+                <div style="font-size: 1.8rem; font-weight: bold; color: var(--success); margin-top: 0.5rem;" id="modal-amount"></div>
+            </div>
+            
+            <div class="input-group" style="margin-top: 1.5rem;">
+                <label>Delivery Address</label>
+                <textarea id="modal-address" rows="3" placeholder="Enter your full home address..."></textarea>
+            </div>
+            
+            <div class="input-group">
+                <label>Payment Method</label>
+                <select id="modal-payment" disabled style="background: #e9ecef; color: #555;">
+                    <option value="cod">Cash on Delivery (COD)</option>
+                    <option value="online">Online Payment (Unavailable)</option>
+                </select>
+                <small style="color: var(--warning); display: block; margin-top: 0.5rem;">Only Cash on Delivery is active currently.</small>
+            </div>
+            
+            <button class="btn btn-success" style="width: 100%; margin-top: 1rem;" onclick="confirmOrder()"><i class="fa-solid fa-check"></i> Place Medicine Order</button>
+        </div>
+    </div>
+
+    <!-- Video Call Overlay -->
+    <div id="video-overlay" class="hidden animate-fade-in">
+        <div class="video-large">
+            Doctor Video Stream
+            <div class="badge" style="position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.5); font-size: 1rem;">
+                <i class="fa-solid fa-circle" style="color: var(--danger); font-size: 0.8rem; margin-right: 5px;"></i> REC
+            </div>
+            <div class="video-small">Patient Stream</div>
+        </div>
+        <div class="video-controls">
+            <button class="control-btn"><i class="fa-solid fa-microphone-slash"></i></button>
+            <button class="control-btn"><i class="fa-solid fa-video"></i></button>
+            <button class="control-btn danger" onclick="endVideoCall()"><i class="fa-solid fa-phone-slash"></i></button>
+        </div>
+    </div>
+
+
+    <script src="/static/js/api.js"></script>
+    <script>
+        let currentPatient = null;
+        let pPhone = '';
+        let apptType = 'Direct';
+        let currentApptId = null;
+        let diffSecs = 0;
+        let timerInterval = null;
+        let pollInterval = null;
+
+        const SEVERE_KEYWORDS = ['chest pain', 'vomiting'];
+
+        async function checkPatient() {
+            const phone = document.getElementById('phone').value.trim();
+            if (!phone) return;
+            pPhone = phone;
+            
+            try {
+                const res = await api.lookupPatient(phone);
+                hideElement('step-phone');
+                if (res.exists) {
+                    currentPatient = res.patient;
+                    document.getElementById('triage-name').innerText = currentPatient.name;
+                    showElement('step-triage');
+                } else {
+                    showElement('step-register');
+                }
+            } catch (e) {
+                document.getElementById('phone-error').innerText = e.message;
+                showElement('phone-error');
+            }
+        }
+
+        async function registerPatient() {
+            const name = document.getElementById('reg-name').value;
+            const age = document.getElementById('reg-age').value;
+            const gender = document.getElementById('reg-gender').value;
+            const password = document.getElementById('reg-pass').value;
+            
+            try {
+                const patient = await api.registerPatient({ phone: pPhone, password, name, age, gender });
+                currentPatient = patient;
+                hideElement('step-register');
+                document.getElementById('triage-name').innerText = currentPatient.name;
+                showElement('step-triage');
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        function setApptType(type) {
+            apptType = type;
+            document.getElementById('btn-type-direct').classList.remove('active');
+            document.getElementById('btn-type-online').classList.remove('active');
+            
+            if(type === 'Direct') {
+                document.getElementById('btn-type-direct').classList.add('active');
+                showElement('distance-alert');
+            } else {
+                document.getElementById('btn-type-online').classList.add('active');
+                hideElement('distance-alert');
+            }
+        }
+
+        async function loadDoctors() {
+            try {
+                const res = await api.getDoctors();
+                const sel = document.getElementById('pref-doctor');
+                res.doctors.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.innerText = `Dr. ${d.name} (${d.specialty}) - Wait: ${d.queue_size} patients`;
+                    sel.appendChild(opt);
+                });
+            } catch(e) { console.error(e); }
+        }
+        loadDoctors();
+
+        // Initialize default view logic
+        setApptType('Direct');
+
+        function addSymptom(sym) {
+            const ta = document.getElementById('symptoms');
+            if(ta.value) ta.value += ', ' + sym;
+            else ta.value = sym;
+            checkDoctorAvailability();
+        }
+
+        function checkDoctorAvailability() {
+            const text = document.getElementById('symptoms').value.toLowerCase();
+            const isSevere = SEVERE_KEYWORDS.some(k => text.includes(k));
+            const div = document.getElementById('doc-availability');
+            
+            if(!text.trim()) {
+                div.innerText = '';
+                return;
+            }
+            if(isSevere) {
+                div.innerHTML = '<i class="fa-solid fa-user-doctor"></i> Specialist Doctor Available (Urgent)';
+                div.style.color = 'var(--danger)';
+            } else {
+                div.innerHTML = '<i class="fa-solid fa-user-doctor"></i> General Physician Available';
+                div.style.color = 'var(--success)';
+            }
+        }
+
+        async function createAppointment() {
+            const symptoms = document.getElementById('symptoms').value;
+            const prefDoc = document.getElementById('pref-doctor').value;
+            
+            if(!symptoms) {
+                alert("Please enter symptoms"); return;
+            }
+            try {
+                const res = await api.createAppointment({
+                    patient_id: currentPatient.id,
+                    symptoms,
+                    type: apptType,
+                    preferred_doctor: prefDoc ? parseInt(prefDoc) : null
+                });
+                hideElement('step-triage');
+                
+                currentApptId = res.appointment.id;
+                
+                document.getElementById('token-number').innerText = res.appointment.token_number;
+                document.getElementById('assigned-doctor').innerText = res.appointment.doctor_name;
+                
+                const pBox = document.getElementById('priority-badge');
+                pBox.innerText = res.appointment.priority;
+                pBox.className = 'badge ' + (res.appointment.priority === 'Urgent' ? 'urgent' : 'normal');
+                
+                document.getElementById('patients-ahead').innerText = res.patients_ahead;
+                
+                if(apptType === 'Direct') {
+                    showElement('ui-offline-wait');
+                    hideElement('ui-online-wait');
+                    startCountdown(res.wait_time_minutes);
+                } else {
+                    hideElement('ui-offline-wait');
+                    showElement('ui-online-wait');
+                }
+                
+                showElement('step-token');
+                startPolling();
+                
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        function startCountdown(minutes) {
+            diffSecs = minutes * 60;
+            updateTimerDisp();
+            timerInterval = setInterval(() => {
+                if(diffSecs > 0) {
+                    diffSecs--;
+                    updateTimerDisp();
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisp() {
+            if(diffSecs < 0) diffSecs = 0;
+            const m = Math.floor(diffSecs / 60).toString().padStart(2, '0');
+            const s = (diffSecs % 60).toString().padStart(2, '0');
+            document.getElementById('live-timer').innerText = `${m}:${s}`;
+            
+            if(diffSecs <= 0) {
+                document.getElementById('patients-ahead').innerText = "It's your turn! Please wait for the doctor to call you in.";
+                clearInterval(timerInterval);
+            }
+        }
+
+        function startPolling() {
+            pollInterval = setInterval(async () => {
+                try {
+                    const data = await api.getAppointment(currentApptId);
+                    if(apptType === 'Direct') {
+                        document.getElementById('patients-ahead').innerText = data.patients_ahead;
+                        // optional: resync timer if patients drop: diffSecs = data.wait_time_minutes * 60;
+                    }
+                    if(data.status === 'Completed') {
+                        if(apptType === 'Direct') checkOfflineCompletion();
+                        // For online, completion triggers when they end call
+                    }
+                } catch(e) {
+                    console.error("Poll error", e);
+                }
+            }, 5000);
+        }
+
+        function checkOfflineCompletion() {
+            clearInterval(timerInterval);
+            clearInterval(pollInterval);
+            hideElement('token-active-area');
+            showElement('pharmacy-message');
+        }
+
+        // Telemedicine logic
+        function startVideoCall() {
+            showElement('video-overlay');
+        }
+
+        function endVideoCall() {
+            hideElement('video-overlay');
+            clearInterval(pollInterval);
+            hideElement('token-active-area');
+            showElement('download-message');
+        }
+
+        let activePrescId = null;
+
+        async function openOrderModal() {
+            try {
+                const prescs = await api.getPatientPrescriptions(currentPatient.id);
+                // Find prescription for this specific appointment
+                const p = prescs.find(x => x.appointment_id === currentApptId);
+                
+                if(!p) {
+                    alert("Prescription not found. Please wait a moment for the doctor to save it.");
+                    return;
+                }
+                
+                activePrescId = p.id;
+                document.getElementById('modal-medicines').innerText = p.medicines;
+                const price = 450 + (p.id * 15);
+                document.getElementById('modal-amount').innerText = '₹' + price.toFixed(2);
+                
+                document.getElementById('order-modal').classList.remove('hidden');
+            } catch(e) {
+                alert("Error: " + e.message);
+            }
+        }
+
+        function closeOrderModal() {
+            document.getElementById('order-modal').classList.add('hidden');
+        }
+
+        async function confirmOrder() {
+            const addr = document.getElementById('modal-address').value.trim();
+            if(!addr) { alert("Please enter your delivery address."); return; }
+            
+            try {
+                await api.orderMedicine(activePrescId);
+                alert("Order Confirmed! Your medicines will be delivered via Cash on Delivery.");
+                closeOrderModal();
+                
+                const btn = document.getElementById('btn-order-meds');
+                if(btn) btn.outerHTML = '<div style="margin-top:1rem; padding: 0.75rem; text-align: center; background: rgba(46, 160, 67, 0.1); color: var(--success); border-radius: 8px; font-weight: 500;"><i class="fa-solid fa-check-circle"></i> Medicines Ordered Successfully</div>';
+            } catch(e) {
+                alert(e.message);
+            }
+        }
+    </script>
+</body>
+</html>

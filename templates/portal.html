@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Portal - HMS</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav>
+        <a href="/"><h2><i class="fa-solid fa-pills"></i> Patient Portal</h2></a>
+    </nav>
+
+    <div class="container" style="max-width: 800px; margin-top: 2rem;">
+        <!-- Portal -->
+        <div id="portal-section" class="animate-fade-in">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h2>Welcome, <span id="patient-name" style="color: var(--accent);"></span>!</h2>
+                <button class="btn btn-secondary" onclick="logout()">Logout</button>
+            </div>
+
+            <div class="glass-panel">
+                <h3><i class="fa-solid fa-prescription-bottle-medical"></i> Medical History & Prescriptions</h3>
+                
+                <div id="prescriptions-list" style="margin-top: 2rem; display: flex; flex-direction: column; gap: 1.5rem;">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Modal -->
+    <div id="order-modal" class="hidden" style="position: fixed; top:0; left:0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+        <div class="glass-panel" style="width: 100%; max-width: 500px; background: #ffffff; animation: fadeIn 0.3s; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+            <i class="fa-solid fa-xmark" style="position: absolute; right: 20px; top: 20px; cursor: pointer; font-size: 1.5rem; color: var(--text-secondary);" onclick="closeOrderModal()"></i>
+            <h2 style="color: var(--text-primary);">Complete Your Order</h2>
+            
+            <div style="margin-top: 1.5rem;">
+                <label style="color: var(--text-secondary); font-size: 0.9rem;">Prescription Items</label>
+                <div id="modal-medicines" style="padding: 1rem; background: #f0f2f5; border-radius: 8px; margin-top: 0.5rem; white-space: pre-wrap; color: var(--text-primary);"></div>
+            </div>
+            
+            <div style="margin-top: 1rem;">
+                <label style="color: var(--text-secondary); font-size: 0.9rem;">Total Amount</label>
+                <div style="font-size: 1.8rem; font-weight: bold; color: var(--success); margin-top: 0.5rem;" id="modal-amount"></div>
+            </div>
+            
+            <div class="input-group" style="margin-top: 1.5rem;">
+                <label>Delivery Address</label>
+                <textarea id="modal-address" rows="3" placeholder="Enter your full home address..."></textarea>
+            </div>
+            
+            <div class="input-group">
+                <label>Payment Method</label>
+                <select id="modal-payment" disabled style="background: #e9ecef; color: #555;">
+                    <option value="cod">Cash on Delivery (COD)</option>
+                    <option value="online">Online Payment (Unavailable)</option>
+                </select>
+                <small style="color: var(--warning); display: block; margin-top: 0.5rem;">Only Cash on Delivery is active currently.</small>
+            </div>
+            
+            <button class="btn btn-success" style="width: 100%; margin-top: 1rem;" onclick="confirmOrder()"><i class="fa-solid fa-check"></i> Place Medicine Order</button>
+        </div>
+    </div>
+
+    <script src="/static/js/api.js"></script>
+    <script>
+        const pId = localStorage.getItem('patient_id');
+        const pName = localStorage.getItem('patient_name');
+
+        if (!pId) {
+            window.location.href = '/';
+        } else {
+            document.getElementById('patient-name').innerText = pName;
+            loadPrescriptions();
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/';
+        }
+
+        async function loadPrescriptions() {
+            try {
+                const prescs = await api.getPatientPrescriptions(pId);
+                const container = document.getElementById('prescriptions-list');
+                container.innerHTML = '';
+                
+                if(prescs.length === 0) {
+                    container.innerHTML = '<p>No past prescriptions found.</p>';
+                    return;
+                }
+                
+                prescs.sort((a,b) => b.id - a.id);
+
+                prescs.forEach(p => {
+                    const div = document.createElement('div');
+                    div.style.background = '#f8f9fa';
+                    div.style.border = '1px solid var(--border-color)';
+                    div.style.padding = '1.5rem';
+                    div.style.borderRadius = '8px';
+                    
+                    let orderArea = '';
+                    if(p.order_status === 'None') {
+                        orderArea = `<button class="btn btn-success" onclick="openOrderModal(${p.id}, \`${p.medicines.replace(/`/g, '\\`')}\`)"><i class="fa-solid fa-truck-medical"></i> Order Prescribed Medicines</button>`;
+                    } else {
+                        const sClass = (p.order_status === 'Delivered') ? 'success' : 'warning';
+                        orderArea = `
+                        <div style="background: #ffffff; border: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0,0,0,0.02); padding: 1rem; border-radius: 8px; display: inline-block;">
+                            <span style="color: var(--text-secondary); font-size: 0.9rem;">Delivery Status:</span> 
+                            <strong style="color: var(--${sClass}); margin-left: 0.5rem; font-size: 1.1rem;">${p.order_status}</strong>
+                        </div>
+                        ${p.order_status === 'Ordered' ? `<button class="btn btn-secondary" style="margin-left: 1rem;" onclick="mockDelivery(${p.id})">Mock Delivery Update -></button>` : ''}
+                        `;
+                    }
+                    
+                    div.innerHTML = `
+                        <div style="margin-bottom: 1rem;">
+                            <h4 style="color: var(--text-primary); margin-bottom: 0.5rem;">Prescription #${p.id}</h4>
+                            <p style="white-space: pre-wrap; color: var(--text-secondary);">${p.medicines}</p>
+                        </div>
+                        <div style="border-top: 1px dashed var(--border-color); padding-top: 1rem;">
+                            ${orderArea}
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        let activeOrderId = null;
+
+        function openOrderModal(id, meds) {
+            activeOrderId = id;
+            document.getElementById('modal-medicines').innerText = meds;
+            
+            // Mock dynamic price
+            const price = 450 + (id * 15);
+            document.getElementById('modal-amount').innerText = '₹' + price.toFixed(2);
+            
+            document.getElementById('order-modal').classList.remove('hidden');
+        }
+
+        function closeOrderModal() {
+            document.getElementById('order-modal').classList.add('hidden');
+        }
+
+        async function confirmOrder() {
+            const addr = document.getElementById('modal-address').value.trim();
+            if(!addr) { alert("Please enter your delivery address."); return; }
+            
+            try {
+                await api.orderMedicine(activeOrderId);
+                alert("Order Confirmed! Your medicines will be delivered via Cash on Delivery.");
+                closeOrderModal();
+                loadPrescriptions();
+            } catch(e) {
+                alert(e.message);
+            }
+        }
+
+        async function mockDelivery(id) {
+            try {
+                await api.updateMedicineStatus(id, 'Delivered');
+                loadPrescriptions();
+            } catch(e) {
+                alert(e.message);
+            }
+        }
+    </script>
+</body>
+</html>
